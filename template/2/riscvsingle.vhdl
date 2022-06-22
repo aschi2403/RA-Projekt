@@ -178,6 +178,7 @@ end;
 architecture struct of controller is
   component maindec
     port(op:             in  STD_LOGIC_VECTOR(6 downto 0);
+         funct3:         in  STD_LOGIC_VECTOR(2 downto 0);
          ResultSrc:      out STD_LOGIC_VECTOR(1 downto 0);
          MemWrite:       out STD_LOGIC;
          Branch, ALUSrc: out STD_LOGIC;
@@ -200,7 +201,7 @@ architecture struct of controller is
   signal Branch: STD_LOGIC;
   signal Jump_s : STD_LOGIC;
 begin
-  md: maindec port map(op, ResultSrc, MemWrite, Branch,
+  md: maindec port map(op, funct3, ResultSrc, MemWrite, Branch,
                        ALUSrc, RegWrite, Jump_s, ImmSrc, ALUOp);
   ad: aludec port map(op(5), funct3, funct7b5, ALUOp, ALUControl);
   
@@ -214,6 +215,7 @@ use IEEE.STD_LOGIC_1164.all;
 
 entity maindec is -- main control decoder
   port(op:             in  STD_LOGIC_VECTOR(6 downto 0); -- TODO
+       funct3:         in  STD_LOGIC_VECTOR(2 downto 0);
        ResultSrc:      out STD_LOGIC_VECTOR(1 downto 0);
        MemWrite:       out STD_LOGIC;
        Branch, ALUSrc: out STD_LOGIC;
@@ -226,23 +228,35 @@ entity maindec is -- main control decoder
 end;
 
 architecture behave of maindec is
-  signal controls: STD_LOGIC_VECTOR(11 downto 0);
+  signal controls: STD_LOGIC_VECTOR(14 downto 0);
 begin
-  process(op) begin
+  process(op, funct3) begin
     case op is
-      when "0000011" => controls <= "100010010000"; -- lw
-      when "0100011" => controls <= "000110000000"; -- sw
-      when "0110011" => controls <= "1---00000100"; -- R-type
-      when "1100011" => controls <= "001000001010"; -- beq
-      when "0010011" => controls <= "100010000100"; -- I-type ALU
-      when "1101111" => controls <= "101100100001"; -- jal, jalr
-      when "0110111"=> controls <=  "1110-0110--0"; -- lui
-      when others    => controls <= "------------"; -- not valid
+      when "0000011" => controls <= "100010010000---"; -- lw
+      when "0100011" => controls <= "000110000000---"; -- sw
+      when "0110011" => controls <= "1---00000100--0"; -- R-type
+      when "1100011" => controls <= "001000001010--0"; -- beq
+      when "0010011" =>
+        if (funct3 = "101")
+        then
+          controls <= "1000-0110--0110"; -- srli
+        else
+          controls <= "100010000100--0"; -- I-type ALU
+        end if;
+      when "1101111" => -- jal, jalr
+       if (funct3 = "000")
+        then
+          controls <= "101100100001--1"; -- TODO adjust for jalr
+       else
+        controls <= "101100100001--0"; 
+       end if;
+      when "0110111"=> controls <=  "1110-0110--0---"; -- lui
+      when others    => controls <= "---------------"; -- not valid
     end case;
   end process;
 
   (RegWrite, ImmSrc(2), ImmSrc(1), ImmSrc(0), ALUSrc, MemWrite,
-   ResultSrc(1), ResultSrc(0), Branch, ALUOp(1), ALUOp(0), Jump) <= controls;
+   ResultSrc(1), ResultSrc(0), Branch, ALUOp(1), ALUOp(0), Jump, SLInput, ShiftDirection, PCTargetSrc) <= controls;
 end;
 
 library IEEE;
