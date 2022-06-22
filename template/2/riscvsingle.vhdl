@@ -139,7 +139,8 @@ architecture struct of riscvsingle is
          Instr:                in     STD_LOGIC_VECTOR(31 downto 0);
          ALUResult, WriteData: out    STD_LOGIC_VECTOR(31 downto 0);
          ReadData:             in     STD_LOGIC_VECTOR(31 downto 0);
-         SLInput, ShiftDirection: in     STD_LOGIC);
+         SLInput, ShiftDirection: in  STD_LOGIC;
+         PCTargetSrc:          in      STD_LOGIC);
   end component;
     
   signal ALUSrc, RegWrite, Jump, Zero, PCSrc: STD_LOGIC;
@@ -154,7 +155,7 @@ begin
   dp: datapath port map(clk, reset, ResultSrc, PCSrc, ALUSrc, 
                         RegWrite, ImmSrc, ALUControl, Zero, 
                         PC, Instr, ALUResult,  WriteData, 
-                        ReadData, '0', '0');
+                        ReadData, '0', '0', '0');
 
 end;
 
@@ -287,7 +288,8 @@ entity datapath is -- RISC-V datapath
        Instr:                   in     STD_LOGIC_VECTOR(31 downto 0);
        ALUResult, WriteData:    out    STD_LOGIC_VECTOR(31 downto 0);
        ReadData:                in     STD_LOGIC_VECTOR(31 downto 0);
-       SLInput, ShiftDirection: in     STD_LOGIC);
+       SLInput, ShiftDirection: in     STD_LOGIC;
+       PCTargetSrc:             in     STD_LOGIC);
 end;
 
 architecture struct of datapath is
@@ -340,13 +342,14 @@ architecture struct of datapath is
   signal ImmExt:                    STD_LOGIC_VECTOR(31 downto 0);
   signal SrcA, SrcB:                STD_LOGIC_VECTOR(31 downto 0);
   signal Result:                    STD_LOGIC_VECTOR(31 downto 0);
-  signal PC_s, WriteData_s, ALUResult_s : STD_LOGIC_VECTOR(31 downto 0);
+  signal PC_s, WriteData_s, ALUResult_s, PC_MUX_Src_S : STD_LOGIC_VECTOR(31 downto 0);
   signal SL_src, SL_pos, ShiftResult: STD_LOGIC_VECTOR(31 downto 0);
 begin
   -- next PC logic
   pcreg: flopr generic map(32) port map(clk, reset, PCNext, PC_s);
   pcadd4: adder port map(PC_s, X"00000004", PCPlus4);
-  pcaddbranch: adder port map(PC_s, ImmExt, PCTarget);
+  pcSrcMux: mux2 generic map(32) port map(PC_s, SrcA, PCTargetSrc, PC_MUX_Src_S);
+  pcaddbranch: adder port map(PC_MUX_Src_S, ImmExt, PCTarget);
   pcmux: mux2 generic map(32) port map(PCPlus4, PCTarget, PCSrc, PCNext);
 
   PC <= PC_s;
