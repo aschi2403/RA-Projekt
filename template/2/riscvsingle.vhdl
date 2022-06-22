@@ -154,7 +154,7 @@ begin
   dp: datapath port map(clk, reset, ResultSrc, PCSrc, ALUSrc, 
                         RegWrite, ImmSrc, ALUControl, Zero, 
                         PC, Instr, ALUResult,  WriteData, 
-                        ReadData, SLInput, ShiftDirection);
+                        ReadData, '0', '0');
 
 end;
 
@@ -286,8 +286,8 @@ entity datapath is -- RISC-V datapath
        PC:                      out    STD_LOGIC_VECTOR(31 downto 0);
        Instr:                   in     STD_LOGIC_VECTOR(31 downto 0);
        ALUResult, WriteData:    out    STD_LOGIC_VECTOR(31 downto 0);
-       ReadData:                in     STD_LOGIC_VECTOR(31 downto 0));
-       SLInput, ShiftDirection: in     STD_LOGIC;
+       ReadData:                in     STD_LOGIC_VECTOR(31 downto 0);
+       SLInput, ShiftDirection: in     STD_LOGIC);
 end;
 
 architecture struct of datapath is
@@ -328,6 +328,13 @@ architecture struct of datapath is
          ALUResult:  out    STD_LOGIC_VECTOR(31 downto 0);
          Zero:       out    STD_LOGIC);
   end component;
+  component shiftlogical
+    port(
+      pos, src: in STD_LOGIC_VECTOR(31 downto 0);
+      direction: in STD_LOGIC;
+      RD: out STD_LOGIC_VECTOR(31 downto 0)
+      );
+  end component;
     
   signal PCNext, PCPlus4, PCTarget: STD_LOGIC_VECTOR(31 downto 0);
   signal ImmExt:                    STD_LOGIC_VECTOR(31 downto 0);
@@ -351,8 +358,8 @@ begin
 
   -- Shift logic
   shift_mux1: mux2 generic map(32) port map(ImmExt, SrcA, SLInput, SL_src);
-  shift_mux2: mux2 generic map(32) port map(std_logic_vector(unsigned(12)), ImmExt, SLInput, SL_pos);
-  shift_component: shift_logical port map(SL_pos, SL_src, ShiftDirection, ShiftResult);
+  shift_mux2: mux2 generic map(32) port map("00000000000000000000000000001100", ImmExt, SLInput, SL_pos);
+  shift_component: shiftlogical port map(SL_pos, SL_src, ShiftDirection, ShiftResult);
     
   -- ALU logic
   srcbmux: mux2 generic map(32) port map(WriteData_s, ImmExt, ALUSrc, SrcB);
@@ -526,7 +533,7 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.all;
 use ieee.numeric_std.all;               -- Needed for shifts
 
-entity shift_logical is
+entity shiftlogical is
   port(
     pos, src: in STD_LOGIC_VECTOR(31 downto 0);
     direction: in STD_LOGIC;
@@ -534,7 +541,7 @@ entity shift_logical is
     );
 end;
 
-architecture behave of shift_logical is
+architecture behave of shiftlogical is
   begin
     process(pos, src) begin
       if (direction = '0') then RD <= std_logic_vector(shift_left(unsigned(src), to_integer(unsigned(pos))));
