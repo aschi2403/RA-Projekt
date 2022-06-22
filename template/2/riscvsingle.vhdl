@@ -124,7 +124,7 @@ architecture struct of riscvsingle is
        PCSrc, ALUSrc:  out    STD_LOGIC;
        RegWrite:       out    STD_LOGIC;
        Jump:           out    STD_LOGIC;
-       ImmSrc:         out    STD_LOGIC_VECTOR(1 downto 0);
+       ImmSrc:         out    STD_LOGIC_VECTOR(2 downto 0);
        ALUControl:     out    STD_LOGIC_VECTOR(2 downto 0));
   end component;
   component datapath
@@ -132,7 +132,7 @@ architecture struct of riscvsingle is
          ResultSrc:            in     STD_LOGIC_VECTOR(2  downto 0);
          PCSrc, ALUSrc:        in     STD_LOGIC;
          RegWrite:             in     STD_LOGIC;
-         ImmSrc:               in     STD_LOGIC_VECTOR(1  downto 0);
+         ImmSrc:               in     STD_LOGIC_VECTOR(2  downto 0);
          ALUControl:           in     STD_LOGIC_VECTOR(2  downto 0);
          Zero:                 out    STD_LOGIC;
          PC:                   out    STD_LOGIC_VECTOR(31 downto 0);
@@ -145,7 +145,7 @@ architecture struct of riscvsingle is
     
   signal ALUSrc, RegWrite, Jump, Zero, PCSrc: STD_LOGIC;
   signal ResultSrc: STD_LOGIC_VECTOR(2 downto 0);
-  signal ImmSrc: STD_LOGIC_VECTOR(1 downto 0);
+  signal ImmSrc: STD_LOGIC_VECTOR(2 downto 0);
   signal ALUControl: STD_LOGIC_VECTOR(2 downto 0);
 begin
   c: controller port map(Instr(6 downto 0), Instr(14 downto 12),
@@ -171,7 +171,7 @@ entity controller is -- single-cycle controller
        PCSrc, ALUSrc:  out    STD_LOGIC;
        RegWrite:       out    STD_LOGIC;
        Jump:           out    STD_LOGIC; -- NOT IN GRAPHIC??
-       ImmSrc:         out    STD_LOGIC_VECTOR(1 downto 0);
+       ImmSrc:         out    STD_LOGIC_VECTOR(2 downto 0);
        ALUControl:     out    STD_LOGIC_VECTOR(2 downto 0));
 end;
 
@@ -182,7 +182,7 @@ architecture struct of controller is
          MemWrite:       out STD_LOGIC;
          Branch, ALUSrc: out STD_LOGIC;
          RegWrite, Jump: out STD_LOGIC;
-         ImmSrc:         out STD_LOGIC_VECTOR(1 downto 0);
+         ImmSrc:         out STD_LOGIC_VECTOR(2 downto 0);
          ALUOp:          out STD_LOGIC_VECTOR(1 downto 0));
   end component;
   component aludec
@@ -214,27 +214,27 @@ entity maindec is -- main control decoder
        MemWrite:       out STD_LOGIC;
        Branch, ALUSrc: out STD_LOGIC;
        RegWrite, Jump: out STD_LOGIC;
-       ImmSrc:         out STD_LOGIC_VECTOR(1 downto 0);
+       ImmSrc:         out STD_LOGIC_VECTOR(2 downto 0);
        ALUOp:          out STD_LOGIC_VECTOR(1 downto 0));
 end;
 
 architecture behave of maindec is
-  signal controls: STD_LOGIC_VECTOR(11 downto 0);
+  signal controls: STD_LOGIC_VECTOR(12 downto 0);
 begin
   process(op) begin
     case op is
-      when "0000011" => controls <= "100100010000"; -- lw
-      when "0100011" => controls <= "001110000000"; -- sw
-      when "0110011" => controls <= "1--000000100"; -- R-type
-      when "1100011" => controls <= "010000001010"; -- beq
-      when "0010011" => controls <= "100100000100"; -- I-type ALU
-      when "1101111" => controls <= "111000100001"; -- jal
+      when "0000011" => controls <= "1000100010000"; -- lw
+      when "0100011" => controls <= "0001110000000"; -- sw
+      when "0110011" => controls <= "1---000000100"; -- R-type
+      when "1100011" => controls <= "0010000001010"; -- beq
+      when "0010011" => controls <= "1000100000100"; -- I-type ALU
+      when "1101111" => controls <= "1011000100001"; -- jal
       --when "1100011" => controls <= "0---00---001"; -- blt
-      when others    => controls <= "------------"; -- not valid
+      when others    => controls <= "-------------"; -- not valid
     end case;
   end process;
 
-  (RegWrite, ImmSrc(1), ImmSrc(0), ALUSrc, MemWrite,
+  (RegWrite, ImmSrc(2), ImmSrc(1), ImmSrc(0), ALUSrc, MemWrite,
    ResultSrc(2), ResultSrc(1), ResultSrc(0), Branch, ALUOp(1), ALUOp(0), Jump) <= controls;
 end;
 
@@ -281,7 +281,7 @@ entity datapath is -- RISC-V datapath
        ResultSrc:               in     STD_LOGIC_VECTOR(2  downto 0);
        PCSrc, ALUSrc:           in     STD_LOGIC;
        RegWrite:                in     STD_LOGIC;
-       ImmSrc:                  in     STD_LOGIC_VECTOR(1  downto 0);
+       ImmSrc:                  in     STD_LOGIC_VECTOR(2  downto 0);
        ALUControl:              in     STD_LOGIC_VECTOR(2  downto 0);
        Zero:                    out    STD_LOGIC;
        PC:                      out    STD_LOGIC_VECTOR(31 downto 0);
@@ -321,7 +321,7 @@ architecture struct of datapath is
   end component;
   component extend
     port(instr:  in  STD_LOGIC_VECTOR(31 downto 7);
-         immsrc: in  STD_LOGIC_VECTOR(1  downto 0);
+         immsrc: in  STD_LOGIC_VECTOR(2  downto 0);
          immext: out STD_LOGIC_VECTOR(31 downto 0));
   end component;
   component alu
@@ -430,7 +430,7 @@ use IEEE.STD_LOGIC_1164.all;
 
 entity extend is -- extend unit
   port(instr:  in  STD_LOGIC_VECTOR(31 downto 7); -- TODO
-    immsrc: in  STD_LOGIC_VECTOR(1  downto 0);
+    immsrc: in  STD_LOGIC_VECTOR(2  downto 0);
     immext: out STD_LOGIC_VECTOR(31 downto 0));
 end;
     
@@ -439,17 +439,19 @@ begin
   process(instr, immsrc) begin -- TODO
     case immsrc is
       -- I-type
-      when "00" =>
+      when "000" =>
         immext <= (31 downto 12 => instr(31)) & instr(31 downto 20);
       -- S-types (stores)
-      when "01" =>
+      when "001" =>
         immext <= (31 downto 12 => instr(31)) & instr(31 downto 25) & instr(11 downto 7);
       -- B-type (branches)
-      when "10" =>
+      when "010" =>
         immext <= (31 downto 12 => instr(31)) & instr(7) & instr(30 downto 25) & instr(11 downto 8) & '0';
       -- J-type (jal)
-      when "11" =>
+      when "011" =>
         immext <= (31 downto 20 => instr(31)) & instr(19 downto 12) & instr(20) & instr(30 downto 21) & '0';
+      when "110" =>
+        immext <= instr(31 downto 12) & "000000000000";
       when others =>
         immext <= (31 downto 0 => '-');
     end case;
