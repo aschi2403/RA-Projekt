@@ -119,7 +119,7 @@ architecture struct of riscvsingle is
     port(op:           in     STD_LOGIC_VECTOR(6 downto 0);
        funct3:         in     STD_LOGIC_VECTOR(2 downto 0);
        funct7b5, Zero: in     STD_LOGIC;
-       ResultSrc:      out    STD_LOGIC_VECTOR(2 downto 0);
+       ResultSrc:      out    STD_LOGIC_VECTOR(1 downto 0);
        MemWrite:       out    STD_LOGIC;
        PCSrc, ALUSrc:  out    STD_LOGIC;
        RegWrite:       out    STD_LOGIC;
@@ -129,7 +129,7 @@ architecture struct of riscvsingle is
   end component;
   component datapath
     port(clk, reset:           in     STD_LOGIC;
-         ResultSrc:            in     STD_LOGIC_VECTOR(2  downto 0);
+         ResultSrc:            in     STD_LOGIC_VECTOR(1  downto 0);
          PCSrc, ALUSrc:        in     STD_LOGIC;
          RegWrite:             in     STD_LOGIC;
          ImmSrc:               in     STD_LOGIC_VECTOR(2  downto 0);
@@ -144,7 +144,7 @@ architecture struct of riscvsingle is
   end component;
     
   signal ALUSrc, RegWrite, Jump, Zero, PCSrc: STD_LOGIC;
-  signal ResultSrc: STD_LOGIC_VECTOR(2 downto 0);
+  signal ResultSrc: STD_LOGIC_VECTOR(1 downto 0);
   signal ImmSrc: STD_LOGIC_VECTOR(2 downto 0);
   signal ALUControl: STD_LOGIC_VECTOR(2 downto 0);
 begin
@@ -166,11 +166,11 @@ entity controller is -- single-cycle controller
   port(op:             in     STD_LOGIC_VECTOR(6 downto 0); -- TODO
        funct3:         in     STD_LOGIC_VECTOR(2 downto 0);
        funct7b5, Zero: in     STD_LOGIC;
-       ResultSrc:      out    STD_LOGIC_VECTOR(2 downto 0);
+       ResultSrc:      out    STD_LOGIC_VECTOR(1 downto 0);
        MemWrite:       out    STD_LOGIC;
        PCSrc, ALUSrc:  out    STD_LOGIC;
        RegWrite:       out    STD_LOGIC;
-       Jump:           out    STD_LOGIC; -- NOT IN GRAPHIC??
+       Jump:           out    STD_LOGIC;
        ImmSrc:         out    STD_LOGIC_VECTOR(2 downto 0);
        ALUControl:     out    STD_LOGIC_VECTOR(2 downto 0));
 end;
@@ -178,12 +178,15 @@ end;
 architecture struct of controller is
   component maindec
     port(op:             in  STD_LOGIC_VECTOR(6 downto 0);
-         ResultSrc:      out STD_LOGIC_VECTOR(2 downto 0);
+         ResultSrc:      out STD_LOGIC_VECTOR(1 downto 0);
          MemWrite:       out STD_LOGIC;
          Branch, ALUSrc: out STD_LOGIC;
          RegWrite, Jump: out STD_LOGIC;
          ImmSrc:         out STD_LOGIC_VECTOR(2 downto 0);
-         ALUOp:          out STD_LOGIC_VECTOR(1 downto 0));
+         ALUOp:          out STD_LOGIC_VECTOR(1 downto 0);
+         SLInput:        out STD_LOGIC;
+         ShiftDirection: out STD_LOGIC;
+         PCTargetSrc:    out STD_LOGIC);
   end component;
   component aludec
     port(opb5:       in  STD_LOGIC;
@@ -203,6 +206,7 @@ begin
   
   PCSrc <= (Branch and Zero) or Jump_s;
   Jump <= Jump_s;
+  
 end;
 
 library IEEE;
@@ -210,32 +214,35 @@ use IEEE.STD_LOGIC_1164.all;
 
 entity maindec is -- main control decoder
   port(op:             in  STD_LOGIC_VECTOR(6 downto 0); -- TODO
-       ResultSrc:      out STD_LOGIC_VECTOR(2 downto 0);
+       ResultSrc:      out STD_LOGIC_VECTOR(1 downto 0);
        MemWrite:       out STD_LOGIC;
        Branch, ALUSrc: out STD_LOGIC;
        RegWrite, Jump: out STD_LOGIC;
        ImmSrc:         out STD_LOGIC_VECTOR(2 downto 0);
-       ALUOp:          out STD_LOGIC_VECTOR(1 downto 0));
+       ALUOp:          out STD_LOGIC_VECTOR(1 downto 0);
+       SLInput:        out STD_LOGIC;
+       ShiftDirection: out STD_LOGIC;
+       PCTargetSrc:    out STD_LOGIC);
 end;
 
 architecture behave of maindec is
-  signal controls: STD_LOGIC_VECTOR(12 downto 0);
+  signal controls: STD_LOGIC_VECTOR(11 downto 0);
 begin
   process(op) begin
     case op is
-      when "0000011" => controls <= "1000100010000"; -- lw
-      when "0100011" => controls <= "0001110000000"; -- sw
-      when "0110011" => controls <= "1---000000100"; -- R-type
-      when "1100011" => controls <= "0010000001010"; -- beq
-      when "0010011" => controls <= "1000100000100"; -- I-type ALU
-      when "1101111" => controls <= "1011000100001"; -- jal
-      --when "1100011" => controls <= "0---00---001"; -- blt
-      when others    => controls <= "-------------"; -- not valid
+      when "0000011" => controls <= "100010010000"; -- lw
+      when "0100011" => controls <= "000110000000"; -- sw
+      when "0110011" => controls <= "1---00000100"; -- R-type
+      when "1100011" => controls <= "001000001010"; -- beq
+      when "0010011" => controls <= "100010000100"; -- I-type ALU
+      when "1101111" => controls <= "101100100001"; -- jal, jalr
+      when "0110111"=> controls <=  "1110-0110--0"; -- lui
+      when others    => controls <= "------------"; -- not valid
     end case;
   end process;
 
   (RegWrite, ImmSrc(2), ImmSrc(1), ImmSrc(0), ALUSrc, MemWrite,
-   ResultSrc(2), ResultSrc(1), ResultSrc(0), Branch, ALUOp(1), ALUOp(0), Jump) <= controls;
+   ResultSrc(1), ResultSrc(0), Branch, ALUOp(1), ALUOp(0), Jump) <= controls;
 end;
 
 library IEEE;
@@ -278,7 +285,7 @@ use IEEE.STD_LOGIC_ARITH.all;
 
 entity datapath is -- RISC-V datapath
   port(clk, reset:              in     STD_LOGIC; -- TODO
-       ResultSrc:               in     STD_LOGIC_VECTOR(2  downto 0);
+       ResultSrc:               in     STD_LOGIC_VECTOR(1  downto 0);
        PCSrc, ALUSrc:           in     STD_LOGIC;
        RegWrite:                in     STD_LOGIC;
        ImmSrc:                  in     STD_LOGIC_VECTOR(2  downto 0);
@@ -309,7 +316,7 @@ architecture struct of datapath is
   end component;
   component mux4 generic(width: integer);
     port(d0, d1, d2, d3: in  STD_LOGIC_VECTOR(width-1 downto 0);
-         s:          in  STD_LOGIC_VECTOR(2 downto 0);
+         s:          in  STD_LOGIC_VECTOR(1 downto 0);
          y:          out STD_LOGIC_VECTOR(width-1 downto 0));
   end component;
   component regfile
@@ -519,17 +526,17 @@ use IEEE.STD_LOGIC_1164.all;
 entity mux4 is -- three-input multiplexer
   generic(width: integer :=8);
   port(d0, d1, d2, d3: in  STD_LOGIC_VECTOR(width-1 downto 0);
-       s:          in  STD_LOGIC_VECTOR(2 downto 0);
+       s:          in  STD_LOGIC_VECTOR(1 downto 0);
        y:          out STD_LOGIC_VECTOR(width-1 downto 0));
 end;
 
 architecture behave of mux4 is
 begin
   process(d0, d1, d2, d3, s) begin
-    if    (s = "000") then y <= d0;
-    elsif (s = "001") then y <= d1;
-    elsif (s = "010") then y <= d2;
-    elsif (s = "110") then y <= d3;
+    if    (s = "00") then y <= d0;
+    elsif (s = "01") then y <= d1;
+    elsif (s = "10") then y <= d2;
+    elsif (s = "11") then y <= d3;
     end if;
   end process;
 end;
